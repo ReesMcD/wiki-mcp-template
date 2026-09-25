@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { DEFAULT_CONFIG, instructionsFor, isWikiPath, parseConfig, slug, typeForFolder } from '../src/settings.js';
 import { fixtureWiki } from './helpers.js';
 
-const repoRoot = path.resolve(import.meta.dirname, '../..');
+const fixtures = path.resolve(import.meta.dirname, 'fixtures');
 
-test('the shipped wiki.config.yaml is valid, matches the defaults, and every type has a template', () => {
-    const { config, error } = parseConfig(readFileSync(path.join(repoRoot, 'wiki.config.yaml'), 'utf8'));
+test('DEFAULT_CONFIG matches the documented default wiki.config.yaml', () => {
+    // test/fixtures/wiki.config.yaml is the file the template ships with.
+    const { config, error } = parseConfig(readFileSync(path.join(fixtures, 'wiki.config.yaml'), 'utf8'));
     assert.equal(error, null);
     assert.deepEqual({ ...config, timezone: undefined }, { ...DEFAULT_CONFIG, timezone: undefined });
-    for (const type of Object.keys(config.types)) assert.doesNotThrow(() => readFileSync(path.join(repoRoot, '_templates', `${type}.md`)), `_templates/${type}.md`);
+    for (const type of Object.keys(config.types)) assert.ok(existsSync(path.join(fixtures, '_templates', `${type}.md`)), `fixtures/_templates/${type}.md`);
 });
 
 test('missing settings fall back to defaults; log and private merge key by key', () => {

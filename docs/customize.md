@@ -86,7 +86,9 @@ Two places shape how Claude uses the wiki:
 2. **`instructions:` in `wiki.config.yaml`**: short, always-on rules that should apply in every client (Project, plain chat, Desktop, Claude Code), e.g. "Client pages live under Projects/Clients/".
 
 ## Changing the server
-The server is plain TypeScript in `mcp/`. Run `npm test && npm run typecheck` before pushing; the GitHub Actions workflow runs the same checks. If you change tool names or behavior, update `claude/project-instructions.md` and the tool table in `mcp/README.md`.
+The server is plain TypeScript in `mcp/`. Run `npm test && npm run typecheck` before pushing; the GitHub Actions workflow runs the same checks.
+
+The workflow also runs when you change `wiki.config.yaml` or `_templates/`, and checks your setup: the config is valid, every type has a template, and every template has a `type:`. The server's own tests use a separate copy of the skeleton (`mcp/test/fixtures/`), so customizing your wiki never breaks them. If you change tool names or behavior, update `claude/project-instructions.md` and the tool table in `mcp/README.md`.
 
 ## Getting template updates
 Repos made from a GitHub template don't stay linked to it. To pull later improvements into your wiki:
