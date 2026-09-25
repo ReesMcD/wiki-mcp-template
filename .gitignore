@@ -1,0 +1,12 @@
+# Obsidian per-device state
+.obsidian/workspace*.json
+.obsidian/cache
+.obsidian/plugins/*/data.json
+.trash/
+.DS_Store
+
+# MCP server
+node_modules/
+mcp/.vercel
+mcp/dist
+.env*

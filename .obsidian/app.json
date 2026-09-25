@@ -1,0 +1,7 @@
+{
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "_assets",
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": ["mcp/", "claude/", "docs/", "README.md", "CLAUDE.md"]
+}
