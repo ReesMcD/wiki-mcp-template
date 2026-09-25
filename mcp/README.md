@@ -35,6 +35,8 @@ npm run dev         # local HTTP server on :3333 over this checkout (or GitHub i
 npm run stdio       # serve this checkout over stdio (Claude Desktop, Claude Code)
 ```
 
+Tests run against their own wiki skeleton in `test/fixtures/`, not this repo's content. `test/repo.test.ts` is the exception: it checks this repo's `wiki.config.yaml` and `_templates/`.
+
 `WIKI_ROOT` points `dev` and `stdio` at a different checkout. `WIKI_TIMEZONE` overrides `timezone` from the config.
 
 | File | What's in it |

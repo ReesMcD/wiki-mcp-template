@@ -1,0 +1,75 @@
+# Settings for this wiki. The MCP server re-reads this file whenever the repo
+# changes, so edits take effect on the next request: no redeploy needed.
+# If something here is invalid, the server falls back to its built-in defaults
+# and `wiki_health` tells you what's wrong.
+
+# Shown to Claude when it connects, so it knows what this wiki is for.
+name: My Wiki
+description: A personal knowledge wiki of people, projects, topics and sources.
+
+# IANA time zone for log dates and timestamps, e.g. America/New_York or Europe/London.
+# (The WIKI_TIMEZONE environment variable overrides this.)
+timezone: UTC
+
+# A live "what's going on right now" page. wiki_overview returns it first.
+# Set to null if you don't want one.
+dashboard: Dashboard.md
+
+# Quick-capture log: wiki_log appends timestamped lines to <folder>/YYYY-MM-DD.md.
+# Before dayStartHour (local time), notes still go to the previous day's log.
+log:
+  folder: Log
+  dayStartHour: 4
+
+# Unsorted notes waiting to be filed. wiki_health lists what's in here.
+inbox: Inbox
+
+# Page types: wiki_create puts a page of each type in its folder, using
+# _templates/<type>.md. Types not listed here go to defaultFolder.
+# `standalone: true` means the page doesn't need anything linking to it
+# (wiki_health won't call it an orphan).
+# To add a type: add it here AND add _templates/<type>.md.
+defaultFolder: Inbox
+types:
+  note:
+    folder: Notes
+    description: Anything that fits nowhere else
+    standalone: true
+  person:
+    folder: People
+    description: Someone you know, work with or read about
+  project:
+    folder: Projects
+    description: Something with a goal and an end
+  topic:
+    folder: Topics
+    description: An area, concept or recurring subject
+  source:
+    folder: Sources
+    description: A book, article, video, podcast or link
+  draft:
+    folder: Private/Drafts
+    description: Work-in-progress from a brainstorm
+    standalone: true
+
+# Private material. Claude sees everything, but any tool called with
+# `public_only: true` (for things you'll share) strips it out.
+# Obsidian %%comments%% are always private.
+private:
+  folders: [Private]                 # every page under these folders
+  frontmatter: { visibility: private } # pages with this frontmatter value
+  headings: [Private, Private Notes] # "## Private Notes" sections (and their subsections)
+  lineMarker: "(private)"            # any line containing this text
+
+# Files and folders (ending in /) that aren't wiki pages. Dotfolders,
+# _templates/, _assets/ and mcp/ are always skipped.
+exclude:
+  - README.md
+  - CLAUDE.md
+  - LICENSE.md
+  - claude/
+  - docs/
+
+# Optional extra guidance for Claude, added to the server's instructions.
+# instructions: |
+#   Pages about clients live under Projects/Clients/. Always tag them `client`.

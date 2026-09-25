@@ -88,6 +88,12 @@ test('current SDK client works end to end, including writes and errors', async (
     const shared = await call('wiki_read', { name: 'Ada', public_only: true });
     assert.doesNotMatch(shared.text, /Project Babbage|London/);
     assert.match((await call('wiki_read', { name: 'Ada' })).text, /Project Babbage/);
+    // Unknown arguments are rejected rather than ignored, so a wrong name for public_only can't leak.
+    const typo = await call('wiki_read', { name: 'Ada', publicOnly: true });
+    assert.ok(typo.isError);
+    assert.doesNotMatch(typo.text, /Project Babbage/);
+    const badOp = await call('wiki_publish', { pages: [{ action: 'update', name: 'Ada', content: 'x' }], message: 'm', dry_run: true });
+    assert.ok(badOp.isError);
     const hidden = await call('wiki_read', { name: 'Surprise Party', public_only: true });
     assert.ok(hidden.isError);
     assert.match((await call('wiki_lookup', { name: 'Surprise Party' })).text, /Private page\./);

@@ -17,6 +17,8 @@ This repo is a Markdown wiki (Obsidian-style) with git as the source of truth. C
 
 ## Working on the MCP server
 - `cd mcp && npm test && npm run typecheck` before pushing.
-- Nothing about the wiki's structure is hard-coded: types, folders, log location and private rules come from `wiki.config.yaml` (`mcp/src/settings.ts` holds the schema and defaults). Keep `DEFAULT_CONFIG` and the shipped `wiki.config.yaml` identical; a test checks this.
+- Nothing about the wiki's structure is hard-coded: types, folders, log location and private rules come from `wiki.config.yaml` (`mcp/src/settings.ts` holds the schema and defaults).
+- Server tests use their own wiki skeleton in `mcp/test/fixtures/` (a copy of the template's original config, templates, Home and Dashboard), so customizing this repo never breaks them. `DEFAULT_CONFIG` must match `mcp/test/fixtures/wiki.config.yaml`; a test checks this.
+- `mcp/test/repo.test.ts` is the one test that reads this repo's own setup: the config is valid, every type has a template, every template has a `type`.
 - To add a page type: add it under `types:` in `wiki.config.yaml` and add `_templates/<type>.md`.
 - Changing tool names or behavior means updating `claude/project-instructions.md` and the tool table in `mcp/README.md`.

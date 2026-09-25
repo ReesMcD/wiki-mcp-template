@@ -65,6 +65,9 @@ function renderPlan(plan: PlanItem[], detail: boolean): string {
 export async function createServer(wiki: Wiki): Promise<McpServer> {
     const config = await wiki.config();
     const types = Object.keys(config.types);
+    // Tool inputs are strict objects: an unknown or misspelled argument is an
+    // error Claude can see and fix, never silently dropped (a dropped
+    // `public_only` would leak private material).
     const server = new McpServer({ name: slug(config.name), version: '1.0.0' }, { instructions: instructionsFor(config) });
 
     server.registerTool(
@@ -73,7 +76,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             title: 'Look up a page',
             description:
                 'Fastest way to answer "who/what is X". Finds a page by name or alias (typos OK) and returns its summary, key facts, sections and what links to it. Use wiki_read for the full page.',
-            inputSchema: z.object({ name: z.string().describe('Page name, alias or nickname, e.g. "Ada Lovelace" or "Ada"'), public_only: publicOnly }),
+            inputSchema: z.strictObject({ name: z.string().describe('Page name, alias or nickname, e.g. "Ada Lovelace" or "Ada"'), public_only: publicOnly }),
             annotations: { readOnlyHint: true, openWorldHint: false }
         },
         async ({ name, public_only }) => {
@@ -117,7 +120,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             title: 'Search the wiki',
             description:
                 'Full-text search across every page (titles, aliases, frontmatter, body). Use for topics or questions ("notes on sourdough", "who did I meet at the conference"). Returns ranked pages with snippets.',
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 query: z.string(),
                 type: z.string().optional().describe(`Only pages of this type: ${[...types, 'hub', 'log'].join(', ')}, ...`),
                 folder: z.string().optional().describe('Only pages under this folder, e.g. "Projects"'),
@@ -140,7 +143,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Read a page',
             description: 'Full content of a page (or one section), plus pages that link to it and links that point at pages that don\'t exist yet.',
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 name: z.string().describe('Title, alias or path'),
                 section: z.string().optional().describe('Only return this section, e.g. "Next Steps"'),
                 public_only: publicOnly
@@ -177,7 +180,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'List pages',
             description: 'List pages with their one-line summaries, filtered by type, folder, tag, status, or pages linking to a given page. E.g. all active projects, everyone linked to a project, every source on a topic.',
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 type: z.string().optional(),
                 folder: z.string().optional(),
                 tag: z.string().optional(),
@@ -216,7 +219,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Wiki overview',
             description: `${config.dashboard ? 'The dashboard page plus a' : 'A'} compact map of every page title grouped by type, and the page types you can create. Call once at the start of a bigger task to orient yourself.`,
-            inputSchema: z.object({ public_only: publicOnly }),
+            inputSchema: z.strictObject({ public_only: publicOnly }),
             annotations: { readOnlyHint: true, openWorldHint: false }
         },
         async ({ public_only }) => {
@@ -246,7 +249,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Add to today\'s log',
             description: `Instantly append timestamped notes to today's log (${config.log.folder}/YYYY-MM-DD.md). Use for quick capture: ideas, things to remember, decisions, names, links. One note per line. Don't ask follow-up questions; just log it.`,
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 text: z.string().describe('One or more notes, one per line'),
                 date: z.string().optional().describe(`YYYY-MM-DD; defaults to today${config.log.dayStartHour ? ` (before ${config.log.dayStartHour}:00 counts as the previous day)` : ''}`)
             }),
@@ -267,7 +270,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Create a page',
             description: `Create a new page from its template (in _templates/). Refuses if the name or an alias already exists; update that page instead. Types and their folders: ${typeList(config)}. Any other type goes to ${config.defaultFolder}/. A stub with just a summary is fine.`,
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 type: z.string().describe(types.join(', ')),
                 name: z.string().describe('Page title, e.g. "Ada Lovelace" or "Kitchen Remodel"'),
                 summary: z.string().describe('One line: who/what this is and why it matters'),
@@ -295,7 +298,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             title: 'Edit a page',
             description:
                 'Targeted edits to an existing page, applied in this order: frontmatter patch, find/replace, section edits, summary. Section edits create the section if it is missing. Prefer small edits over rewriting the body. Nothing is ever deleted outright: to retire a page, set status: archived and explain why in the page.',
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 name: z.string().describe('Title, alias or path of the page'),
                 frontmatter: z.record(z.string(), z.unknown()).optional().describe('Keys to set; null removes a key. E.g. {"status": "done", "owner": "[[Ada Lovelace]]"}'),
                 replace: z
@@ -345,12 +348,12 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             title: 'Publish a batch of pages',
             description:
                 'Create and update many pages in ONE all-or-nothing commit: use it to publish the result of a brainstorm (e.g. a project plus its people, sources and topics, and back-links added to existing pages). ALWAYS call with dry_run: true first and show the user the plan; commit (dry_run: false) only after they confirm. Everything is validated before anything is written: duplicate names, ambiguous targets and bad edits are all reported together.',
-            inputSchema: z.object({
+            inputSchema: z.strictObject({
                 pages: z
                     .array(
                         z.discriminatedUnion('action', [
-                            z.object({ action: z.literal('create'), name: z.string().describe('New page title'), ...createFields }),
-                            z.object({ action: z.literal('update'), name: z.string().describe('Existing page: title, alias or path'), ...editFields })
+                            z.strictObject({ action: z.literal('create'), name: z.string().describe('New page title'), ...createFields }),
+                            z.strictObject({ action: z.literal('update'), name: z.string().describe('Existing page: title, alias or path'), ...editFields })
                         ])
                     )
                     .min(1)
@@ -381,7 +384,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Recent changes',
             description: 'The latest commits to the wiki (newest first): what was added or changed recently, from any device.',
-            inputSchema: z.object({ limit: z.number().int().min(1).max(50).optional().describe('Default 15') }),
+            inputSchema: z.strictObject({ limit: z.number().int().min(1).max(50).optional().describe('Default 15') }),
             annotations: { readOnlyHint: true, openWorldHint: false }
         },
         async ({ limit }) => {
@@ -396,7 +399,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
         {
             title: 'Wiki health check',
             description: 'Maintenance report: problems with wiki.config.yaml, broken [[links]] (pages worth creating), orphan pages nothing links to, pages missing a summary, unprocessed logs, and Inbox items waiting to be filed.',
-            inputSchema: z.object({}),
+            inputSchema: z.strictObject({}),
             annotations: { readOnlyHint: true, openWorldHint: false }
         },
         async () => {

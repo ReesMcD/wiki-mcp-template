@@ -4,15 +4,17 @@ import path from 'node:path';
 import { FsStore } from '../src/store.js';
 import { Wiki } from '../src/wiki.js';
 
-const repoRoot = path.resolve(import.meta.dirname, '../..');
+// The tests' own copy of the wiki skeleton, so they don't depend on how this
+// repo's config, templates or pages have been customized.
+const fixtures = path.resolve(import.meta.dirname, 'fixtures');
 
 /**
- * A throwaway copy of the real wiki skeleton plus a few fixture pages. Pass
+ * A throwaway wiki: the fixture skeleton plus a few pages. Pass
  * `config` to replace wiki.config.yaml (its timezone is then used as-is).
  */
 export function fixtureWiki(now = new Date('2026-09-27T23:30:00Z'), opts: { config?: string } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), 'wiki-'));
-    for (const entry of ['_templates', 'Home.md', 'Dashboard.md', 'wiki.config.yaml']) cpSync(path.join(repoRoot, entry), path.join(root, entry), { recursive: true });
+    for (const entry of ['_templates', 'Home.md', 'Dashboard.md', 'wiki.config.yaml']) cpSync(path.join(fixtures, entry), path.join(root, entry), { recursive: true });
     const write = (rel: string, text: string) => {
         mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
         writeFileSync(path.join(root, rel), text);
