@@ -86,7 +86,7 @@ export class GitHubStore implements Store {
     }
 
     private async api(pathname: string, init: RequestInit = {}): Promise<Response> {
-        return this.fetchImpl(`${this.base}${pathname}`, {
+        const res = await this.fetchImpl(`${this.base}${pathname}`, {
             ...init,
             headers: {
                 accept: 'application/vnd.github+json',
@@ -97,6 +97,10 @@ export class GitHubStore implements Store {
                 ...init.headers
             }
         });
+        // The token is the part people get wrong or let expire: say so plainly.
+        if (res.status === 401) throw new Error('GitHub rejected GITHUB_TOKEN (401). It has probably expired or been revoked: create a new one and update it in Vercel, then redeploy.');
+        if (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0') throw new Error('GitHub API rate limit reached. It resets within the hour.');
+        return res;
     }
 
     private async json<T>(pathname: string, init?: RequestInit): Promise<T> {
@@ -106,8 +110,12 @@ export class GitHubStore implements Store {
     }
 
     async head(): Promise<string> {
-        const ref = await this.json<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(this.opts.branch)}`);
-        return ref.object.sha;
+        const res = await this.api(`/git/ref/heads/${encodePath(this.opts.branch)}`);
+        if (res.status === 404) {
+            throw new Error(`GitHub can't find ${this.opts.owner}/${this.opts.repo} on branch "${this.opts.branch}". Check WIKI_REPO and WIKI_BRANCH, and that GITHUB_TOKEN has access to that repo.`);
+        }
+        if (!res.ok) throw new Error(`GitHub GET branch ${this.opts.branch} failed: ${res.status} ${await res.text()}`);
+        return ((await res.json()) as { object: { sha: string } }).object.sha;
     }
 
     async snapshot(): Promise<Snapshot> {

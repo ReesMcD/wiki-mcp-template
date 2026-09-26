@@ -173,6 +173,7 @@ export class Wiki {
     private loading: Promise<void> | null = null;
     private cfg: WikiConfig = parseConfig(null).config;
     private cfgError: string | null = null;
+    private storeErr: string | null = null;
     private readonly timeZoneOverride?: string;
     private readonly freshnessMs: number;
     private readonly now: () => Date;
@@ -197,6 +198,24 @@ export class Wiki {
         return this.cfgError;
     }
 
+    /**
+     * Settings for building the server even when the store can't be reached:
+     * the loaded config, or the defaults on a cold start. Tool calls then
+     * report the store error themselves.
+     */
+    async configOrDefault(): Promise<WikiConfig> {
+        try {
+            return await this.config();
+        } catch {
+            return this.cfg;
+        }
+    }
+
+    /** Set while the store is unreachable and a cached copy is being served. */
+    get storeError(): string | null {
+        return this.storeErr;
+    }
+
     get timeZone(): string {
         return this.timeZoneOverride ?? this.cfg.timezone ?? 'UTC';
     }
@@ -218,6 +237,20 @@ export class Wiki {
     }
 
     private async refresh(): Promise<void> {
+        try {
+            await this.load();
+            this.storeErr = null;
+        } catch (err) {
+            const why = err instanceof Error ? err.message : String(err);
+            // Never loaded: nothing to fall back on.
+            if (this.rev === null) throw new WikiError(`Couldn't load the wiki: ${why}`);
+            // Keep serving the last good copy; try again after the freshness window.
+            this.storeErr = why;
+            this.checkedAt = Date.now();
+        }
+    }
+
+    private async load(): Promise<void> {
         const head = await this.store.head();
         if (head !== this.rev) {
             const [snap, configFile] = await Promise.all([this.store.snapshot(), this.store.readFile(CONFIG_PATH)]);
@@ -527,7 +560,7 @@ export class Wiki {
 
     // -- Health --------------------------------------------------------------
 
-    async health(): Promise<{ configError: string | null; broken: Map<string, string[]>; orphans: Page[]; noSummary: Page[]; unprocessedLogs: Page[]; inbox: Page[] }> {
+    async health(): Promise<{ storeError: string | null; configError: string | null; broken: Map<string, string[]>; orphans: Page[]; noSummary: Page[]; unprocessedLogs: Page[]; inbox: Page[] }> {
         const pages = await this.pages();
         const known = new Set<string>();
         for (const p of pages) for (const n of [p.title, ...p.aliases, p.path.replace(/\.md$/, '')]) known.add(normalizeName(n));
@@ -548,7 +581,7 @@ export class Wiki {
         const unprocessedLogs = pages.filter(p => p.type === 'log' && p.data.processed !== true);
         const inboxFolder = this.cfg.inbox;
         const inbox = inboxFolder ? pages.filter(p => p.folder === inboxFolder || p.folder.startsWith(`${inboxFolder}/`)) : [];
-        return { configError: this.cfgError, broken, orphans, noSummary, unprocessedLogs, inbox };
+        return { storeError: this.storeErr, configError: this.cfgError, broken, orphans, noSummary, unprocessedLogs, inbox };
     }
 }
 

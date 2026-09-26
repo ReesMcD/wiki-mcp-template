@@ -63,7 +63,9 @@ function renderPlan(plan: PlanItem[], detail: boolean): string {
  * wiki.config.yaml, so this is async and runs once per request.
  */
 export async function createServer(wiki: Wiki): Promise<McpServer> {
-    const config = await wiki.config();
+    // Even if GitHub is unreachable, the server comes up: tools are listed and
+    // each call reports the problem, instead of the whole connector failing.
+    const config = await wiki.configOrDefault();
     const types = Object.keys(config.types);
     // Tool inputs are strict objects: an unknown or misspelled argument is an
     // error Claude can see and fix, never silently dropped (a dropped
@@ -230,6 +232,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             const logs = pages.filter(p => p.type === 'log').sort((a, b) => b.title.localeCompare(a.title));
             const { date } = wiki.today();
             const parts = [`${config.name}: ${config.description}\nToday: ${date} (${wiki.timeZone}). ${pages.length} pages.`];
+            if (wiki.storeError) parts.push(`⚠ Can't reach the wiki's repo right now, so this is the last good copy and edits will fail: ${wiki.storeError}`);
             if (dashboard) {
                 const fm = dashboard.fmText && !public_only ? `---\n${dashboard.fmText}\n---` : '';
                 parts.push(`## ${dashboard.path.replace(/\.md$/, '')}\n${[fm, wiki.bodyFor(dashboard, !!public_only).trim()].filter(Boolean).join('\n')}`);
@@ -406,6 +409,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             const h = await wiki.health();
             const broken = [...h.broken.entries()].sort((a, b) => b[1].length - a[1].length);
             const parts = [
+                ...(h.storeError ? [`Store problem (serving the last good copy, edits will fail): ${h.storeError}`] : []),
                 ...(h.configError ? [`Config problem: ${h.configError}`] : []),
                 `Broken links (${broken.length}): ${broken.length ? '\n' + broken.slice(0, 40).map(([l, from]) => `- [[${l}]] ← ${list(from, 5)}`).join('\n') : 'none'}`,
                 `Orphans (${h.orphans.length}): ${list(h.orphans.map(p => p.title), 40) || 'none'}`,
