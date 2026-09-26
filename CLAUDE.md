@@ -9,6 +9,9 @@ This repo is a Markdown wiki (Obsidian-style) with git as the source of truth. C
 - `mcp/`: the remote MCP server (TypeScript, deployed on Vercel). See `mcp/README.md`.
 - `claude/project-instructions.md`: the system prompt for the claude.ai Project. Keep it in sync when tools or conventions change.
 - `docs/`: setup, customization and design notes.
+- `scripts/update-from-template.sh`: merges newer template changes into a wiki made from it.
+- `.github/workflows/site.yml`: optional public website. `mcp/src/export.ts` (`npm run export`) writes the public-only copy that Quartz builds.
+- `.claude/`: a SessionStart hook that installs `mcp/` dependencies in Claude Code on the web.
 
 ## Content conventions (for anyone editing pages)
 - Frontmatter (`type`, `aliases`, `status`, links as quoted `"[[Page]]"`), then a **bold one-line summary**, then `## Sections`.
