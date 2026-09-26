@@ -91,12 +91,12 @@ The server is plain TypeScript in `mcp/`. Run `npm test && npm run typecheck` be
 The workflow also runs when you change `wiki.config.yaml` or `_templates/`, and checks your setup: the config is valid, every type has a template, and every template has a `type:`. The server's own tests use a separate copy of the skeleton (`mcp/test/fixtures/`), so customizing your wiki never breaks them. If you change tool names or behavior, update `claude/project-instructions.md` and the tool table in `mcp/README.md`.
 
 ## Getting template updates
-Repos made from a GitHub template don't stay linked to it. To pull later improvements into your wiki:
+Repos made from a GitHub template don't stay linked to it. To pull in later improvements, commit your work and run:
 
 ```bash
-git remote add template https://github.com/ReesMcD/wiki-mcp-template.git
-git fetch template
-git merge template/main --allow-unrelated-histories   # first time only needs the flag
+scripts/update-from-template.sh
 ```
 
-Conflicts are usually limited to files you customized (`wiki.config.yaml`, `Home.md`, templates); keep your side for those.
+It fetches the template and merges only what changed there since your wiki was created: pages you deleted stay deleted and your settings stay yours. (The first time, it finds the template version your wiki started from and links the two histories, so git knows what's new.) If you changed a file the template also changed, it lists the conflicts and how to finish or undo (`git merge --abort`). Afterwards run `cd mcp && npm install && npm test`, then push.
+
+`TEMPLATE_URL` and `TEMPLATE_BRANCH` point it at a fork or another branch.
