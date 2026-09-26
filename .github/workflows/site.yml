@@ -48,6 +48,8 @@ jobs:
       - name: Get Quartz
         run: git clone --quiet --depth 1 --branch "$QUARTZ_VERSION" https://github.com/jackyzha0/quartz.git _quartz
 
+      # Title from wiki.config.yaml, the Pages address, no analytics, and no
+      # CNAME file (set a custom domain in Settings → Pages instead).
       - name: Configure Quartz
         working-directory: _quartz
         env:
@@ -57,6 +59,7 @@ jobs:
           sed -e "s|^  pageTitle: .*|  pageTitle: \"${title:-Wiki}\"|" \
               -e "s|^  baseUrl: .*|  baseUrl: ${BASE_URL}|" \
               -e '/^  analytics:$/{N;s/.*/  analytics: null/;}' \
+              -e '/source: github:quartz-community\/cname$/{n;s/enabled: true/enabled: false/;}' \
               quartz.config.default.yaml > quartz.config.yaml
 
       - name: Build site
