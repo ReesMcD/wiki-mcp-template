@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
+import { parseFrontmatter, stripPrivate } from './markdown.js';
 import { instructionsFor, slug, typeList } from './settings.js';
 import { findSection, keyFields, sectionList, Wiki, WikiError, type Page, type PlanItem, type PublishOp } from './wiki.js';
 
@@ -63,7 +64,9 @@ function renderPlan(plan: PlanItem[], detail: boolean): string {
  * wiki.config.yaml, so this is async and runs once per request.
  */
 export async function createServer(wiki: Wiki): Promise<McpServer> {
-    const config = await wiki.config();
+    // Even if GitHub is unreachable, the server comes up: tools are listed and
+    // each call reports the problem, instead of the whole connector failing.
+    const config = await wiki.configOrDefault();
     const types = Object.keys(config.types);
     // Tool inputs are strict objects: an unknown or misspelled argument is an
     // error Claude can see and fix, never silently dropped (a dropped
@@ -230,6 +233,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             const logs = pages.filter(p => p.type === 'log').sort((a, b) => b.title.localeCompare(a.title));
             const { date } = wiki.today();
             const parts = [`${config.name}: ${config.description}\nToday: ${date} (${wiki.timeZone}). ${pages.length} pages.`];
+            if (wiki.storeError) parts.push(`⚠ Can't reach the wiki's repo right now, so this is the last good copy and edits will fail: ${wiki.storeError}`);
             if (dashboard) {
                 const fm = dashboard.fmText && !public_only ? `---\n${dashboard.fmText}\n---` : '';
                 parts.push(`## ${dashboard.path.replace(/\.md$/, '')}\n${[fm, wiki.bodyFor(dashboard, !!public_only).trim()].filter(Boolean).join('\n')}`);
@@ -380,6 +384,75 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
     );
 
     server.registerTool(
+        'wiki_move',
+        {
+            title: 'Rename or move a page',
+            description:
+                'Rename a page and/or move it to another folder, rewriting every [[link]] to it across the wiki, as ONE commit. Title links follow a rename, path links follow any move, and the old title is kept as an alias so lookups still find it. Use it to file Inbox notes into their proper folder, or fix a page name. ALWAYS call with dry_run: true first and show the user the plan.',
+            inputSchema: z.strictObject({
+                name: z.string().describe('The page to move: title, alias or path'),
+                new_name: z.string().optional().describe('New title, e.g. "Ada Lovelace"'),
+                folder: z.string().optional().describe(`New folder, e.g. "People" or "Projects/Home". Types and their folders: ${typeList(config)}`),
+                keep_alias: z.boolean().optional().describe('On a rename, add the old title to aliases (default true)'),
+                message: z.string().optional().describe('Commit message'),
+                dry_run: z.boolean().describe('true = preview only, nothing written. Always preview first.')
+            }),
+            annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+        },
+        async ({ name, new_name, folder, keep_alias, message, dry_run }) => {
+            try {
+                const r = await wiki.move(name, { newName: new_name, folder, keepAlias: keep_alias, message, dryRun: dry_run });
+                const head = `${r.from} → ${r.to}${r.newTitle !== r.oldTitle ? ` ([[${r.oldTitle}]] → [[${r.newTitle}]])` : ''}`;
+                const lines = [
+                    r.aliasAdded ? `"${r.oldTitle}" is added to aliases.` : '',
+                    r.edits.length
+                        ? `Links rewritten on ${r.edits.length} page(s):\n${r.edits.map(e => `- [[${e.title}]] (${e.path}): ${e.links} link(s)`).join('\n')}`
+                        : 'No other page needs its links changed.'
+                ].filter(Boolean);
+                if (dry_run) return text(`PREVIEW (nothing written yet): ${head}\n${lines.join('\n')}\n\nCall again with dry_run: false to move it.`);
+                return text(`Moved in one commit: ${head}\n${lines.join('\n')}`);
+            } catch (err) {
+                return fail(err);
+            }
+        }
+    );
+
+    server.registerTool(
+        'wiki_history',
+        {
+            title: 'Page history',
+            description:
+                'The commits that changed one page (newest first): when, and the commit message. Pass version (from the list) to see the page as it was then, e.g. to answer "what did this say before?" or to recover something. Also works with the old path of a page that was moved.',
+            inputSchema: z.strictObject({
+                name: z.string().describe('Title, alias or path (an old path works too)'),
+                version: z.string().optional().describe('A version id from the list, to read the page as it was then'),
+                limit: z.number().int().min(1).max(50).optional().describe('Default 15'),
+                public_only: publicOnly
+            }),
+            annotations: { readOnlyHint: true, openWorldHint: false }
+        },
+        async ({ name, version, limit, public_only }) => {
+            try {
+                if (version) {
+                    const v = await wiki.versionAt(name, version);
+                    if (public_only && v.private) return { ...text(`${v.path} is private.`), isError: true };
+                    const parsed = parseFrontmatter(v.text);
+                    const body = public_only ? stripPrivate(parsed.body, config.private) : parsed.body;
+                    return text(`# ${v.title} as of version ${version.slice(0, 7)}\npath: ${v.path}\n\n${public_only ? '' : parsed.fmText ? `---\n${parsed.fmText}\n---\n` : ''}${body.trim()}`);
+                }
+                const h = await wiki.history(name, limit ?? 15);
+                if (public_only && h.private) return { ...text(`${h.path} is private.`), isError: true };
+                if (!h.versions.length) return text(`No history found for ${h.path}.`);
+                return text(
+                    `History of [[${h.title}]] (${h.path}), newest first:\n${h.versions.map(v => `- ${v.when.slice(0, 16).replace('T', ' ')} · ${v.rev.slice(0, 7)} · ${v.message}`).join('\n')}\n\nPass version to see the page as it was.`
+                );
+            } catch (err) {
+                return fail(err);
+            }
+        }
+    );
+
+    server.registerTool(
         'wiki_recent_changes',
         {
             title: 'Recent changes',
@@ -406,6 +479,7 @@ export async function createServer(wiki: Wiki): Promise<McpServer> {
             const h = await wiki.health();
             const broken = [...h.broken.entries()].sort((a, b) => b[1].length - a[1].length);
             const parts = [
+                ...(h.storeError ? [`Store problem (serving the last good copy, edits will fail): ${h.storeError}`] : []),
                 ...(h.configError ? [`Config problem: ${h.configError}`] : []),
                 `Broken links (${broken.length}): ${broken.length ? '\n' + broken.slice(0, 40).map(([l, from]) => `- [[${l}]] ← ${list(from, 5)}`).join('\n') : 'none'}`,
                 `Orphans (${h.orphans.length}): ${list(h.orphans.map(p => p.title), 40) || 'none'}`,

@@ -51,12 +51,55 @@ export function toYaml(value: unknown): string {
 
 const WIKILINK = /!?\[\[([^\]|#^\n]+)(?:[#^][^\]|\n]*)?(?:\|[^\]\n]*)?\]\]/g;
 
+/** Fenced code blocks and `inline code`, where [[...]] isn't a link. */
+const CODE = /^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$|`[^`\n]*`/gm;
+
 /** Targets of every [[wikilink]] in the text (frontmatter included). Code blocks and `inline code` aren't links. */
 export function extractLinks(text: string): string[] {
     const out = new Set<string>();
-    const prose = text.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1.*$/gm, '').replace(/`[^`\n]*`/g, '');
-    for (const m of prose.matchAll(WIKILINK)) out.add(m[1].trim());
+    for (const m of text.replace(CODE, '').matchAll(WIKILINK)) out.add(m[1].trim());
     return [...out];
+}
+
+/** A wikilink split into target and the rest: "#heading", "^block", "|label". */
+const WIKILINK_PARTS = /(!?)\[\[([^\]|#^\n]+)((?:[#^][^\]|\n]*)?(?:\|[^\]\n]*)?)\]\]/g;
+
+/**
+ * Rewrite link targets outside code. `retarget` gets each target and
+ * returns its replacement, or null to leave the link alone. Headings,
+ * block refs, labels and embeds (![[...]]) are kept.
+ */
+export function rewriteLinks(text: string, retarget: (target: string) => string | null): string {
+    return mapLinks(text, (whole, bang, target, rest) => {
+        const next = retarget(target.trim());
+        return next === null ? whole : `${bang}[[${next}${rest}]]`;
+    });
+}
+
+/**
+ * Turn links whose target matches into plain text (their label, or the
+ * target name), e.g. links to private pages in a public export. Embeds of
+ * matching targets are dropped entirely.
+ */
+export function unlinkLinks(text: string, unlink: (target: string) => boolean): string {
+    return mapLinks(text, (whole, bang, target, rest) => {
+        if (!unlink(target.trim())) return whole;
+        if (bang) return '';
+        const label = /\|([^\]]*)$/.exec(rest)?.[1];
+        return (label ?? target).trim();
+    });
+}
+
+/** Apply `fn` to every wikilink outside code. */
+function mapLinks(text: string, fn: (whole: string, bang: string, target: string, rest: string) => string): string {
+    const rewrite = (prose: string) => prose.replace(WIKILINK_PARTS, (whole, bang: string, target: string, rest: string) => fn(whole, bang, target, rest));
+    let out = '';
+    let last = 0;
+    for (const m of text.matchAll(CODE)) {
+        out += rewrite(text.slice(last, m.index)) + m[0];
+        last = m.index! + m[0].length;
+    }
+    return out + rewrite(text.slice(last));
 }
 
 /** Normalize a page name or alias for matching: case, accents and punctuation insensitive. */

@@ -6,7 +6,8 @@ A Markdown wiki you can talk to. Plain Markdown in a GitHub repo, readable and e
 - **Capture:** "log: call the plumber tomorrow" → appended to today's log instantly.
 - **Create:** "person: Grace Hopper, met at the conference" → a page from the right template, duplicates refused.
 - **Plan:** brainstorm with Claude, then publish everything as one previewed commit.
-- **Share safely:** anything marked private is stripped when Claude writes something for other people.
+- **Reorganize:** "move that note into Projects and rename it" → moved in one commit, every link fixed.
+- **Share safely:** anything marked private is stripped when Claude writes something for other people, and from the optional public website.
 
 ## Quick start
 1. **Use this template** → create a new **private** repo.
@@ -32,7 +33,9 @@ Step-by-step, about 30 minutes: **[docs/setup.md](docs/setup.md)**.
 ├── .obsidian/              # vault settings: wikilinks, templates, daily notes
 ├── .mcp.json               # the wiki tools for Claude Code (local, over stdio)
 ├── claude/project-instructions.md   # system prompt for the claude.ai Project
+├── .github/workflows/      # tests on every change; optional public website (Quartz)
 ├── mcp/                    # the MCP server (TypeScript, Vercel)
+├── scripts/                # update-from-template.sh: pull in template improvements
 └── docs/                   # setup, customization, design notes
 ```
 

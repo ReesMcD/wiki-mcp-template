@@ -177,6 +177,7 @@ export function instructionsFor(config: WikiConfig): string {
         `- Quick capture: wiki_log appends to today's log (${config.log.folder}/YYYY-MM-DD). wiki_create makes a page from its template.`,
         `- Page types: ${typeList(config)}.`,
         '- While brainstorming, read as much as you like but don\'t write until the user says publish. Then send everything as one wiki_publish batch: dry_run first, commit after they confirm.',
+        '- Never delete pages: archive with status: archived. To rename or re-file a page use wiki_move (it rewrites every link); wiki_history shows earlier versions.',
         `- Private material: ${privacy.join(', ')}. Pass public_only: true for anything meant to be shared.`,
         '- Never invent facts silently: if the wiki doesn\'t say, say so, then label anything you add as new.'
     ];

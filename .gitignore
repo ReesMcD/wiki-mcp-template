@@ -10,3 +10,9 @@ node_modules/
 mcp/.vercel
 mcp/dist
 .env*
+
+# Public site builds
+_site/
+_site-content/
+_site-preview/
+_quartz/
