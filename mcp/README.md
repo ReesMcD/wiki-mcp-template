@@ -17,6 +17,8 @@ Deploying it: see [`../docs/setup.md`](../docs/setup.md). Configuring the wiki i
 | `wiki_create` | New page from `_templates/<type>.md` in the type's folder; refuses duplicate names or aliases |
 | `wiki_update` | Targeted edits: frontmatter patch, find/replace, section append/replace, summary |
 | `wiki_publish` | Many creates and updates as **one all-or-nothing commit**, with a `dry_run` preview (new pages plus line-level changes). Used to publish a brainstorm. |
+| `wiki_move` | Rename a page and/or move it to another folder, rewriting every link to it, in **one commit** with a `dry_run` preview. The old title stays as an alias. |
+| `wiki_history` | Commits that changed one page; pass a `version` to read it as it was. Works with a moved page's old path. |
 | `wiki_recent_changes` | Latest commits, from any device |
 | `wiki_health` | Config problems, broken links, orphans, missing summaries, unprocessed logs, Inbox |
 

@@ -26,7 +26,7 @@ function fakeGitHub(refStatus = 200) {
         if (method === 'PUT' && url.endsWith('/contents/People/Ada.md')) return new Response('conflict', { status: 409 });
         if (method === 'PUT') return Response.json({ content: { sha: 'blob2' }, commit: { sha: 'def456', parents: [{ sha: 'abc123' }] } });
         if (url.endsWith('/git/commits/abc123')) return Response.json({ tree: { sha: 'tree1' } });
-        if (url.endsWith('/git/trees/tree1?recursive=1')) return Response.json({ truncated: false, tree: [{ path: 'People/Ada.md', sha: 'blob1', type: 'blob' }, { path: 'People', sha: 't', type: 'tree' }] });
+        if (url.endsWith('/git/trees/tree1?recursive=1')) return Response.json({ truncated: false, tree: [{ path: 'People/Ada.md', sha: 'blob1', type: 'blob' }, { path: 'Old.md', sha: 'blobOld', type: 'blob' }, { path: 'People', sha: 't', type: 'tree' }] });
         if (method === 'POST' && url.endsWith('/git/trees')) return Response.json({ sha: 'tree2' });
         if (method === 'POST' && url.endsWith('/git/commits')) return Response.json({ sha: 'commit2' });
         if (method === 'PATCH' && url.endsWith('/git/refs/heads/main')) return refStatus === 200 ? Response.json({}) : new Response('not fast-forward', { status: refStatus });
@@ -65,14 +65,16 @@ test('commitFiles makes one commit on top of head and detects conflicts', async 
     const res = await store.commitFiles(
         [
             { path: 'People/Ada.md', text: 'new ada', prevSha: 'blob1' },
-            { path: 'Projects/Japan Trip.md', text: 'japan', prevSha: null }
+            { path: 'Projects/Japan Trip.md', text: 'japan', prevSha: null },
+                { path: 'Old.md', text: null, prevSha: 'blobOld' }
         ],
         'Add Japan trip'
     );
     assert.deepEqual(res, { rev: 'commit2', parentRev: 'abc123' });
     const tree = calls.find(c => c.method === 'POST' && c.url.endsWith('/git/trees'))!;
     assert.equal(tree.body.base_tree, 'tree1');
-    assert.deepEqual(tree.body.tree.map((t: { path: string }) => t.path), ['People/Ada.md', 'Projects/Japan Trip.md']);
+    assert.deepEqual(tree.body.tree.map((t: { path: string }) => t.path), ['People/Ada.md', 'Projects/Japan Trip.md', 'Old.md']);
+    assert.deepEqual(tree.body.tree[2], { path: 'Old.md', mode: '100644', type: 'blob', sha: null }, 'a null text deletes the file');
     const commit = calls.find(c => c.method === 'POST' && c.url.endsWith('/git/commits'))!;
     assert.deepEqual(commit.body, { message: 'Add Japan trip', tree: 'tree2', parents: ['abc123'] });
     assert.deepEqual(calls.at(-1)!.body, { sha: 'commit2', force: false });

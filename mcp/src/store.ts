@@ -25,11 +25,20 @@ export interface WriteResult {
 
 export interface FileChange {
     path: string;
-    text: string;
+    /** New content, or null to delete the file. */
+    text: string | null;
     prevSha: string | null;
 }
 
 export interface Change {
+    when: string;
+    message: string;
+}
+
+/** One commit that touched a file, newest first in history(). */
+export interface Version {
+    /** Commit id; pass to readFileAt() to see the file as it was. */
+    rev: string;
     when: string;
     message: string;
 }
@@ -59,6 +68,10 @@ export interface Store {
      */
     commitFiles(files: FileChange[], message: string): Promise<Omit<WriteResult, 'sha'>>;
     recentChanges(limit: number): Promise<Change[]>;
+    /** Commits that changed this file, newest first. */
+    history(filePath: string, limit: number): Promise<Version[]>;
+    /** The file as it was at a revision from history(), or null if it didn't exist then. */
+    readFileAt(filePath: string, rev: string): Promise<string | null>;
 }
 
 export function gitBlobSha(text: string): string {
@@ -174,7 +187,11 @@ export class GitHubStore implements Store {
         }
         const newTree = await this.json<{ sha: string }>('/git/trees', {
             method: 'POST',
-            body: JSON.stringify({ base_tree: commit.tree.sha, tree: files.map(f => ({ path: f.path, mode: '100644', type: 'blob', content: f.text })) })
+            // A null sha deletes the file (used when a page moves).
+            body: JSON.stringify({
+                base_tree: commit.tree.sha,
+                tree: files.map(f => (f.text === null ? { path: f.path, mode: '100644', type: 'blob', sha: null } : { path: f.path, mode: '100644', type: 'blob', content: f.text }))
+            })
         });
         const newCommit = await this.json<{ sha: string }>('/git/commits', {
             method: 'POST',
@@ -193,13 +210,32 @@ export class GitHubStore implements Store {
         );
         return commits.map(c => ({ when: c.commit.author.date, message: c.commit.message.split('\n')[0] }));
     }
+
+    async history(filePath: string, limit: number): Promise<Version[]> {
+        const commits = await this.json<Array<{ sha: string; commit: { message: string; author: { date: string } } }>>(
+            `/commits?sha=${encodeURIComponent(this.opts.branch)}&path=${encodeURIComponent(filePath)}&per_page=${limit}`
+        );
+        return commits.map(c => ({ rev: c.sha, when: c.commit.author.date, message: c.commit.message.split('\n')[0] }));
+    }
+
+    async readFileAt(filePath: string, rev: string): Promise<string | null> {
+        if (!/^[0-9a-f]{7,40}$/i.test(rev)) return null;
+        const res = await this.api(`/contents/${encodePath(filePath)}?ref=${rev}`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error(`GitHub read ${filePath}@${rev} failed: ${res.status}`);
+        const data = (await res.json()) as { content: string; type: string };
+        return data.type === 'file' ? Buffer.from(data.content, 'base64').toString('utf8') : null;
+    }
 }
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.obsidian', '.trash']);
 
-/** Serves a local checkout. Writes go straight to disk (no git commit). */
+/**
+ * Serves a local checkout. Writes go straight to disk (no git commit), so
+ * history only covers writes made by this process.
+ */
 export class FsStore implements Store {
-    private changes: Change[] = [];
+    private changes: Array<Change & { rev: string; files: Map<string, string | null> }> = [];
 
     constructor(private readonly root: string) {}
 
@@ -250,8 +286,9 @@ export class FsStore implements Store {
         const abs = path.join(this.root, filePath);
         await fs.mkdir(path.dirname(abs), { recursive: true });
         await fs.writeFile(abs, text, 'utf8');
-        this.changes.unshift({ when: new Date().toISOString(), message });
-        return { rev: await this.head(), parentRev, sha: gitBlobSha(text) };
+        const rev = await this.head();
+        this.record(rev, message, [[filePath, text]]);
+        return { rev, parentRev, sha: gitBlobSha(text) };
     }
 
     async commitFiles(files: FileChange[], message: string): Promise<Omit<WriteResult, 'sha'>> {
@@ -261,14 +298,35 @@ export class FsStore implements Store {
         const parentRev = await this.head();
         for (const f of files) {
             const abs = path.join(this.root, f.path);
+            if (f.text === null) {
+                await fs.rm(abs, { force: true });
+                continue;
+            }
             await fs.mkdir(path.dirname(abs), { recursive: true });
             await fs.writeFile(abs, f.text, 'utf8');
         }
-        this.changes.unshift({ when: new Date().toISOString(), message });
-        return { rev: await this.head(), parentRev };
+        const rev = await this.head();
+        this.record(rev, message, files.map(f => [f.path, f.text]));
+        return { rev, parentRev };
+    }
+
+    private record(rev: string, message: string, files: Array<[string, string | null]>): void {
+        this.changes.unshift({ rev, when: new Date().toISOString(), message, files: new Map(files) });
     }
 
     async recentChanges(limit: number): Promise<Change[]> {
-        return this.changes.slice(0, limit);
+        return this.changes.slice(0, limit).map(({ when, message }) => ({ when, message }));
+    }
+
+    async history(filePath: string, limit: number): Promise<Version[]> {
+        return this.changes
+            .filter(c => c.files.has(filePath))
+            .slice(0, limit)
+            .map(({ rev, when, message }) => ({ rev, when, message }));
+    }
+
+    async readFileAt(filePath: string, rev: string): Promise<string | null> {
+        const change = this.changes.find(c => c.rev === rev && c.files.has(filePath));
+        return change ? (change.files.get(filePath) ?? null) : null;
     }
 }

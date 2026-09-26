@@ -9,6 +9,7 @@ import {
     parseFrontmatter,
     patchFrontmatter,
     plainText,
+    rewriteLinks,
     setSummary,
     stripPrivate,
     summaryLine,
@@ -18,7 +19,7 @@ import {
     type SectionAction
 } from './markdown.js';
 import { CONFIG_PATH, folderForType, isPrivatePage, isWikiPath, parseConfig, standaloneTypes, typeForFolder, type WikiConfig } from './settings.js';
-import { ConflictError, gitBlobSha, type Store, type StoredFile, type WriteResult } from './store.js';
+import { ConflictError, gitBlobSha, type FileChange, type Store, type StoredFile, type Version, type WriteResult } from './store.js';
 
 export interface Page {
     path: string;
@@ -143,6 +144,19 @@ export interface PlanItem {
     before: string | null;
     after: string;
     prevSha: string | null;
+}
+
+export interface MoveResult {
+    from: string;
+    to: string;
+    /** Title before and after (the same when only the folder changes). */
+    oldTitle: string;
+    newTitle: string;
+    /** Whether the old title was added to `aliases`. */
+    aliasAdded: boolean;
+    /** Other pages whose links were rewritten, with how many links each. */
+    edits: Array<{ path: string; title: string; links: number }>;
+    committed: boolean;
 }
 
 export interface PublishResult {
@@ -552,6 +566,119 @@ export class Wiki {
                 if (!(err instanceof ConflictError) || attempt >= 3) throw err;
             }
         }
+    }
+
+    /**
+     * Rename and/or move a page and rewrite every link to it, as one commit.
+     * With `dryRun` nothing is written and the plan is returned.
+     */
+    async move(
+        name: string,
+        opts: { newName?: string; folder?: string; keepAlias?: boolean; dryRun?: boolean; message?: string } = {}
+    ): Promise<MoveResult> {
+        for (let attempt = 0; ; attempt++) {
+            const { result, files } = await this.planMove(name, opts);
+            if (opts.dryRun) return result;
+            try {
+                const commit = await this.store.commitFiles(files, opts.message ?? `Move ${result.oldTitle} → ${result.to.replace(/\.md$/, '')}`);
+                this.byPath.delete(result.from);
+                for (const f of files) if (f.text !== null) this.remember({ path: f.path, text: f.text, sha: gitBlobSha(f.text) }, { ...commit, sha: '' });
+                return { ...result, committed: true };
+            } catch (err) {
+                if (!(err instanceof ConflictError) || attempt >= 2) throw err;
+                this.checkedAt = 0;
+            }
+        }
+    }
+
+    private async planMove(
+        name: string,
+        opts: { newName?: string; folder?: string; keepAlias?: boolean }
+    ): Promise<{ result: MoveResult; files: FileChange[] }> {
+        const pages = await this.pages();
+        const page = await this.resolve(name);
+        const title = opts.newName === undefined ? page.title : opts.newName.trim().replace(/\s+/g, ' ');
+        if (!title || /[\\/:*?"<>|#^[\]]/.test(title)) throw new WikiError(`"${opts.newName}" can't be used as a page name (avoid / \\ : * ? " < > | # ^ [ ]).`);
+        const folder = (opts.folder ?? page.folder).replace(/^\/+|\/+$/g, '');
+        const to = folder ? `${folder}/${title}.md` : `${title}.md`;
+        if (folder.split('/').some(s => s === '..' || s === '.' || (folder && !s)) || !isWikiPath(to, this.cfg)) {
+            throw new WikiError(`Folder "${folder}" isn't a wiki content folder.`);
+        }
+        if (to === page.path) throw new WikiError(`[[${page.title}]] is already at ${to}. Pass new_name and/or folder.`);
+        const taken = pages.find(p => p.path !== page.path && p.path.toLowerCase() === to.toLowerCase());
+        if (taken) throw new WikiError(`${taken.path} already exists.`);
+        const renamed = title.toLowerCase() !== page.title.toLowerCase();
+        if (renamed) {
+            const clash = (await this.find(title)).find(m => m.score >= 97 && m.page.path !== page.path);
+            if (clash) throw new WikiError(`"${title}" already exists as [[${clash.page.title}]] (${clash.page.path}). Pick a different name.`);
+        }
+
+        // Title links follow a rename; path links follow any move. Alias links keep working as they are.
+        const oldTarget = page.path.replace(/\.md$/, '').toLowerCase();
+        const newTarget = to.replace(/\.md$/, '');
+        let hits = 0;
+        const retarget = (target: string): string | null => {
+            const bare = target.replace(/\.md$/i, '');
+            const next = bare.includes('/') ? (bare.toLowerCase() === oldTarget ? newTarget : null) : renamed && bare.toLowerCase() === page.title.toLowerCase() ? title : null;
+            if (next !== null) hits++;
+            return next;
+        };
+
+        let text = rewriteLinks(page.text, retarget);
+        const aliases = asList(page.data.aliases);
+        const aliasAdded = renamed && opts.keepAlias !== false && !aliases.some(a => a.toLowerCase() === page.title.toLowerCase());
+        if (aliasAdded) {
+            const parsed = parseFrontmatter(text);
+            text = `${assemble(patchFrontmatter(parsed.fmText, { aliases: [...aliases, page.title] }), parsed.body).replace(/\s*$/, '')}\n`;
+        }
+        const files: FileChange[] = [
+            { path: page.path, text: null, prevSha: page.sha },
+            { path: to, text, prevSha: null }
+        ];
+        const edits: MoveResult['edits'] = [];
+        for (const p of pages) {
+            if (p.path === page.path) continue;
+            hits = 0;
+            const after = rewriteLinks(p.text, retarget);
+            if (after === p.text) continue;
+            files.push({ path: p.path, text: after, prevSha: p.sha });
+            edits.push({ path: p.path, title: p.title, links: hits });
+        }
+        return { result: { from: page.path, to, oldTitle: page.title, newTitle: title, aliasAdded, edits, committed: false }, files };
+    }
+
+    /**
+     * Commits that changed a page, newest first. `name` can also be the path
+     * of a page that no longer exists (e.g. before it was moved).
+     */
+    async history(name: string, limit = 15): Promise<{ path: string; title: string; private: boolean; versions: Version[] }> {
+        const { path, title, private: priv } = await this.pageOrPath(name);
+        return { path, title, private: priv, versions: await this.store.history(path, limit) };
+    }
+
+    /** A page's text as of one of its history() versions. */
+    async versionAt(name: string, rev: string): Promise<{ path: string; title: string; private: boolean; text: string }> {
+        const { path, title, private: priv } = await this.pageOrPath(name);
+        // The list shows short ids; expand one to the full revision.
+        const want = rev.trim().toLowerCase();
+        const full = want.length >= 4 ? (await this.store.history(path, 100)).find(v => v.rev.toLowerCase().startsWith(want))?.rev : undefined;
+        const text = full ? await this.store.readFileAt(path, full) : null;
+        if (text === null) throw new WikiError(`${path} didn't exist at version "${rev}". Use a version from wiki_history.`);
+        return { path, title, private: priv || isPrivatePage(path.split('/').slice(0, -1).join('/'), parseFrontmatter(text).data, this.cfg), text };
+    }
+
+    private async pageOrPath(name: string): Promise<{ path: string; title: string; private: boolean }> {
+        const raw = unwrapLink(name).replace(/^\/+/, '');
+        // A path means exactly that path, even if no page lives there any more (moved or deleted).
+        if (raw.includes('/')) {
+            const path = raw.endsWith('.md') ? raw : `${raw}.md`;
+            const page = (await this.pages()).find(p => p.path === path);
+            if (page) return { path, title: page.title, private: page.private };
+            if (!isWikiPath(path, this.cfg)) throw new WikiError(`"${raw}" isn't a wiki page path.`);
+            return { path, title: path.split('/').pop()!.replace(/\.md$/, ''), private: isPrivatePage(path.split('/').slice(0, -1).join('/'), {}, this.cfg) };
+        }
+        const page = await this.resolve(name);
+        return { path: page.path, title: page.title, private: page.private };
     }
 
     async recentChanges(limit: number) {

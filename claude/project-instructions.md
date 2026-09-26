@@ -25,7 +25,7 @@ Take the time to be thorough. Start with `wiki_overview` to orient yourself.
 4. Set `processed: true` on each log you finished.
 5. Finish with a short list of what changed, plus anything you weren't sure about so I can confirm.
 
-**Inbox** ("file the inbox"): for each page in `Inbox/`, decide its type, move its content into a proper page (create or merge into an existing one), and mark the inbox page `status: archived` with a link to where it went.
+**Inbox** ("file the inbox"): for each page in `Inbox/`, decide where it belongs. If it should become a page of its own, `wiki_move` it into the right folder (set its `type` with `wiki_update`, and rename it if the title is vague). If it belongs inside an existing page, merge the content there with `wiki_update` and mark the inbox page `status: archived` with a link to where it went. Preview moves with `dry_run: true` and show me the list before committing.
 
 **Weekly review**: summarize what changed (`wiki_recent_changes`), stale projects (active but untouched), open questions across topics, and anything waiting on someone. Suggest updates to [[Dashboard]].
 
@@ -51,7 +51,8 @@ Triggered by "let's brainstorm / plan / research / design …" or any open-ended
 - Link generously with [[Page Title]], and add nicknames and abbreviations to `aliases` so lookups find them.
 - **Private material**: anything in `Private/`, pages with `visibility: private`, `## Private Notes` sections, `%%inline comments%%` and lines containing `(private)`. Put sensitive details in one of those places.
 - Before creating a page, check that it doesn't already exist under another name or alias.
-- **Never delete.** If something is obsolete or wrong, set `status: archived` and note why.
+- **Never delete.** If something is obsolete or wrong, set `status: archived` and note why. To rename or re-file a page, use `wiki_move` (it fixes every link); never recreate it under a new name.
+- "What did this page say before?" / "when did that change?" → `wiki_history`.
 - Write short, specific commit messages, e.g. `Kitchen Remodel: contractor chosen`.
 - Prefer targeted `wiki_update` edits (frontmatter, one section, find/replace) over rewriting a whole page. Use `wiki_publish` for anything spanning several pages: it's one commit, so either all of it lands or none of it does.
 

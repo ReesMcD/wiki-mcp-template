@@ -45,7 +45,7 @@ test('2025-era clients (stateless JSON-RPC) can list and call tools', async () =
 
     const tools = await rpc(handler, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, '2025-06-18');
     const names = tools.body.result.tools.map((t: { name: string }) => t.name).sort();
-    assert.deepEqual(names, ['wiki_create', 'wiki_health', 'wiki_list', 'wiki_log', 'wiki_lookup', 'wiki_overview', 'wiki_publish', 'wiki_read', 'wiki_recent_changes', 'wiki_search', 'wiki_update']);
+    assert.deepEqual(names, ['wiki_create', 'wiki_health', 'wiki_history', 'wiki_list', 'wiki_log', 'wiki_lookup', 'wiki_move', 'wiki_overview', 'wiki_publish', 'wiki_read', 'wiki_recent_changes', 'wiki_search', 'wiki_update']);
     const lookupTool = tools.body.result.tools.find((t: { name: string }) => t.name === 'wiki_lookup');
     assert.equal(lookupTool.inputSchema.type, 'object');
     assert.equal(lookupTool.annotations.readOnlyHint, true);
@@ -123,6 +123,17 @@ test('current SDK client works end to end, including writes and errors', async (
     const done = await call('wiki_publish', { pages: batch, message: 'Add Compilers', dry_run: false });
     assert.match(done.text, /Published in one commit \("Add Compilers"\): 1 new, 1 edited/);
     assert.match((await call('wiki_lookup', { name: 'Compilers' })).text, /topic/);
+
+    const movePreview = await call('wiki_move', { name: 'Grace', new_name: 'Grace Hopper', dry_run: true });
+    assert.match(movePreview.text, /PREVIEW[\s\S]*People\/Grace.md → People\/Grace Hopper.md[\s\S]*"Grace" is added to aliases/);
+    assert.match((await call('wiki_move', { name: 'Grace', new_name: 'Grace Hopper', dry_run: false })).text, /Moved in one commit/);
+    assert.match((await call('wiki_lookup', { name: 'Grace' })).text, /\[\[Grace Hopper\]\]/);
+    const history = await call('wiki_history', { name: 'Grace Hopper' });
+    assert.match(history.text, /History of \[\[Grace Hopper\]\]/);
+    const graceHistory = await call('wiki_history', { name: 'People/Grace.md' });
+    const firstVersion = /· ([0-9a-f]{7}) · Add person: Grace/.exec(graceHistory.text)![1];
+    assert.match((await call('wiki_history', { name: 'People/Grace.md', version: firstVersion })).text, /Compiler pioneer/);
+    assert.ok((await call('wiki_history', { name: 'Surprise Party', public_only: true })).isError);
     await client.close();
 });
 

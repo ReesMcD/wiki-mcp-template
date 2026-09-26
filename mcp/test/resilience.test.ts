@@ -22,7 +22,9 @@ function flaky(store: Store) {
         readFile: guard(p => store.readFile(p)),
         writeFile: guard((p, t, m, s) => store.writeFile(p, t, m, s)),
         commitFiles: guard((f, m) => store.commitFiles(f, m)),
-        recentChanges: guard(n => store.recentChanges(n))
+        recentChanges: guard(n => store.recentChanges(n)),
+        history: guard((p, n) => store.history(p, n)),
+        readFileAt: guard((p, r) => store.readFileAt(p, r))
     };
     return { state, store: wrapped };
 }
