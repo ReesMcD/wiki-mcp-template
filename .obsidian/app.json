@@ -3,5 +3,16 @@
   "newLinkFormat": "shortest",
   "attachmentFolderPath": "_assets",
   "alwaysUpdateLinks": true,
-  "userIgnoreFilters": ["mcp/", "claude/", "docs/", "README.md", "CLAUDE.md"]
+  "userIgnoreFilters": [
+    "mcp/",
+    "claude/",
+    "docs/",
+    "README.md",
+    "CLAUDE.md",
+    "_site/",
+    "_site-content/",
+    "_site-preview/",
+    "_quartz/",
+    "scripts/"
+  ]
 }

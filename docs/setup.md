@@ -90,8 +90,20 @@ The same server runs locally over stdio against your checkout (edits go straight
   Or just use the remote connector from step 5, which Claude Desktop picks up automatically.
 - **Cowork:** use the connector, or point it at your local clone.
 
-## 9. Optional: a read-only website
-[Quartz](https://quartz.jzhao.xyz/) can build a site from the repo (free on Vercel or Cloudflare Pages, works with a private repo). Exclude `Private/` and anything else private if you share it.
+## 9. Optional: a public website
+The **Public site** GitHub Action builds a read-only website of your wiki with [Quartz](https://quartz.jzhao.xyz/): search, backlinks, graph view, dark mode. It publishes only public material, using the same rules as `public_only`:
+- private pages, `## Private Notes` sections, `%%comments%%` and `(private)` lines are removed
+- logs and the Inbox are left out (raw notes)
+- links to pages that aren't published become plain text, so there are no dead links pointing at hidden pages
+- only attachments that published pages use are copied
+
+It's off until you turn it on:
+1. **Settings → Pages → Source: GitHub Actions.** GitHub Pages on a private repo needs a paid GitHub plan; the site itself is always public.
+2. **Actions → Public site → Run workflow.** Your site appears at `https://<owner>.github.io/<repo>/`. To rebuild on every change, uncomment the `push` trigger in `.github/workflows/site.yml`.
+
+The site's title comes from `name` in `wiki.config.yaml`; analytics are off. To see exactly what would be published, run `cd mcp && npm run export -- ../_site-preview` and look through `_site-preview/`. To host elsewhere (Cloudflare Pages, Netlify, Vercel), run the same steps as the workflow and point the host at the `_site/` folder it builds.
+
+> Check before you turn it on: anything not marked private **will be public**. Search the wiki for names, addresses or anything sensitive that isn't in `Private/` or a private section yet.
 
 ## Maintenance
 - Rotate the GitHub token before it expires (update `GITHUB_TOKEN` in Vercel, then redeploy).

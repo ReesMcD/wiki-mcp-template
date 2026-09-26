@@ -1,0 +1,81 @@
+# Publishes a read-only website of the wiki's public pages with Quartz.
+# Private pages, private sections, %%comments%% and marked lines are removed
+# first (the same rules as public_only), and logs and the Inbox are left out.
+#
+# Off until you turn it on:
+#   1. Settings → Pages → Source: "GitHub Actions".
+#      (GitHub Pages on a private repo needs a paid GitHub plan. The site
+#      itself is public either way.)
+#   2. Actions → "Public site" → Run workflow. To rebuild on every change,
+#      uncomment the `push` trigger below.
+# Your site: https://<owner>.github.io/<repo>/  (see docs/setup.md for other hosts)
+name: Public site
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  QUARTZ_VERSION: v5.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Export public pages
+        working-directory: mcp
+        run: |
+          npm ci
+          npm run export -- ../_site-content
+
+      - name: Get Quartz
+        run: git clone --quiet --depth 1 --branch "$QUARTZ_VERSION" https://github.com/jackyzha0/quartz.git _quartz
+
+      - name: Configure Quartz
+        working-directory: _quartz
+        env:
+          BASE_URL: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          title="$(sed -n 's/^name:[[:space:]]*//p' ../wiki.config.yaml | head -n 1 | tr -d '"')"
+          sed -e "s|^  pageTitle: .*|  pageTitle: \"${title:-Wiki}\"|" \
+              -e "s|^  baseUrl: .*|  baseUrl: ${BASE_URL}|" \
+              -e '/^  analytics:$/{N;s/.*/  analytics: null/;}' \
+              quartz.config.default.yaml > quartz.config.yaml
+
+      - name: Build site
+        working-directory: _quartz
+        run: |
+          npm ci
+          npx quartz plugin restore
+          npx quartz build -d ../_site-content -o ../_site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
