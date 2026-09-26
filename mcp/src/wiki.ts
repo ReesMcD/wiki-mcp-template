@@ -3,7 +3,6 @@ import {
     assemble,
     editSection,
     extractLinks,
-    findSection,
     findSections,
     normalizeName,
     parseFrontmatter,
@@ -122,6 +121,13 @@ export function dateInZone(tz: string, at: Date = new Date()): { date: string; t
 }
 
 export class WikiError extends Error {}
+
+/** Tidy a page name, or refuse characters that can't be in a file name or wikilink. */
+function checkName(raw: string): string {
+    const name = raw.trim().replace(/\s+/g, ' ');
+    if (!name || /[\\/:*?"<>|#^[\]]/.test(name)) throw new WikiError(`"${raw}" can't be used as a page name (avoid / \\ : * ? " < > | # ^ [ ]).`);
+    return name;
+}
 
 export interface CreateInput {
     type: string;
@@ -420,16 +426,10 @@ export class Wiki {
      * holds names claimed earlier in the same publish batch.
      */
     private async buildCreate(input: CreateInput, reserved = new Map<string, string>()): Promise<{ path: string; text: string; type: string; name: string }> {
-        const name = input.name.trim().replace(/\s+/g, ' ');
-        if (!name || /[\\/:*?"<>|#^[\]]/.test(name)) {
-            throw new WikiError(`"${input.name}" can't be used as a page name (avoid / \\ : * ? " < > | # ^ [ ]).`);
-        }
+        const name = checkName(input.name);
         await this.pages();
         const type = input.type.toLowerCase();
-        const folder = (input.folder ?? folderForType(type, this.cfg)).replace(/^\/+|\/+$/g, '');
-        if (folder.split('/').some(s => s === '..' || s === '.' || !s) || !isWikiPath(`${folder}/x.md`, this.cfg)) {
-            throw new WikiError(`Folder "${folder}" isn't a wiki content folder.`);
-        }
+        const path = this.pagePath(input.folder ?? folderForType(type, this.cfg), name);
 
         // Refuse duplicates: the same name or any alias already in use.
         const names = [name, ...asList(input.frontmatter?.aliases)];
@@ -456,7 +456,17 @@ export class Wiki {
             if (!parsed.body.includes('{{summary}}')) body = setSummary(body, input.summary);
             for (const [heading, content] of Object.entries(input.sections ?? {})) body = editSection(body, heading, 'replace', content, this.privacy);
         }
-        return { path: `${folder}/${name}.md`, text: `${assemble(fm, body).replace(/\s*$/, '')}\n`, type, name };
+        return { path, text: `${assemble(fm, body).replace(/\s*$/, '')}\n`, type, name };
+    }
+
+    /** The path for a page in `folder` ("" is the top of the wiki), refusing folders that aren't wiki content. */
+    private pagePath(folder: string, name: string): string {
+        const clean = folder.replace(/^\/+|\/+$/g, '');
+        const path = clean ? `${clean}/${name}.md` : `${name}.md`;
+        if ((clean && clean.split('/').some(s => s === '..' || s === '.' || !s)) || !isWikiPath(path, this.cfg)) {
+            throw new WikiError(`Folder "${clean}" isn't a wiki content folder.`);
+        }
+        return path;
     }
 
     /**
@@ -597,13 +607,8 @@ export class Wiki {
     ): Promise<{ result: MoveResult; files: FileChange[] }> {
         const pages = await this.pages();
         const page = await this.resolve(name);
-        const title = opts.newName === undefined ? page.title : opts.newName.trim().replace(/\s+/g, ' ');
-        if (!title || /[\\/:*?"<>|#^[\]]/.test(title)) throw new WikiError(`"${opts.newName}" can't be used as a page name (avoid / \\ : * ? " < > | # ^ [ ]).`);
-        const folder = (opts.folder ?? page.folder).replace(/^\/+|\/+$/g, '');
-        const to = folder ? `${folder}/${title}.md` : `${title}.md`;
-        if (folder.split('/').some(s => s === '..' || s === '.' || (folder && !s)) || !isWikiPath(to, this.cfg)) {
-            throw new WikiError(`Folder "${folder}" isn't a wiki content folder.`);
-        }
+        const title = opts.newName === undefined ? page.title : checkName(opts.newName);
+        const to = this.pagePath(opts.folder ?? page.folder, title);
         if (to === page.path) throw new WikiError(`[[${page.title}]] is already at ${to}. Pass new_name and/or folder.`);
         const taken = pages.find(p => p.path !== page.path && p.path.toLowerCase() === to.toLowerCase());
         if (taken) throw new WikiError(`${taken.path} already exists.`);
@@ -769,4 +774,3 @@ export function sectionList(body: string): string[] {
         .map(s => s.heading);
 }
 
-export { findSection };

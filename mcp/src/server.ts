@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { parseFrontmatter, stripPrivate } from './markdown.js';
+import { findSection, parseFrontmatter, stripPrivate } from './markdown.js';
 import { instructionsFor, slug, typeList } from './settings.js';
-import { findSection, keyFields, sectionList, Wiki, WikiError, type Page, type PlanItem, type PublishOp } from './wiki.js';
+import { keyFields, sectionList, Wiki, WikiError, type Page, type PlanItem, type PublishOp } from './wiki.js';
 
 const publicOnly = z
     .boolean()

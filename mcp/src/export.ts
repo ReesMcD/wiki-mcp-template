@@ -6,7 +6,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assemble, extractLinks, normalizeName, parseFrontmatter, patchFrontmatter, stripPrivate, unlinkLinks } from './markdown.js';
+import { assemble, extractLinks, normalizeName, patchFrontmatter, stripPrivate, unlinkLinks } from './markdown.js';
 import { FsStore } from './store.js';
 import { Wiki, type Page } from './wiki.js';
 

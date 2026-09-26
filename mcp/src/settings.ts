@@ -50,7 +50,6 @@ const schema = z.object({
 });
 
 export type WikiConfig = z.infer<typeof schema>;
-export type TypeConfig = z.infer<typeof typeSchema>;
 
 /** Used when the repo has no wiki.config.yaml (and as the base for a broken one). */
 export const DEFAULT_CONFIG: WikiConfig = {

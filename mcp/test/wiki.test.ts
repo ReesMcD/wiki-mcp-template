@@ -71,6 +71,8 @@ test('create uses the template, fills fields and refuses duplicates', async () =
     await assert.rejects(wiki.create({ type: 'person', name: 'a/b', summary: 'x' }), /can't be used/);
     await assert.rejects(wiki.create({ type: 'person', name: 'X', summary: 'x', folder: '../etc' }), /isn't a wiki content folder/);
     await assert.rejects(wiki.create({ type: 'note', name: 'X', summary: 'x', folder: 'docs' }), /isn't a wiki content folder/);
+    // "" is the top of the wiki, the same as for wiki_move.
+    assert.equal((await wiki.create({ type: 'note', name: 'Scratchpad', summary: 'x', folder: '' })).path, 'Scratchpad.md');
     // Unknown types still work: they land in the default folder with a minimal page.
     assert.equal((await wiki.create({ type: 'recipe', name: 'Pancakes', summary: 'Sunday pancakes' })).path, 'Inbox/Pancakes.md');
 });

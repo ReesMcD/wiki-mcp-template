@@ -43,5 +43,7 @@ Step-by-step, about 30 minutes: **[docs/setup.md](docs/setup.md)**.
 Page types, folders, the log, what counts as private, and extra guidance for Claude all live in `wiki.config.yaml`. The server re-reads it on every change, so no redeploy is needed. The default types (person, project, topic, source, note) are a starting point for a personal knowledge base; swap them for recipes, clients, characters, papers, whatever your wiki is about. See **[docs/customize.md](docs/customize.md)**.
 
 ## More
+- [docs/setup.md](docs/setup.md): deploy, connect Claude, Obsidian, optional public website
+- [docs/customize.md](docs/customize.md): settings, page types, privacy, template updates
 - [mcp/README.md](mcp/README.md): the tools, how the server works, local development
 - [docs/design.md](docs/design.md): why it's built this way

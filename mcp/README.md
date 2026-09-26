@@ -35,6 +35,7 @@ npm test            # unit + end-to-end tests (no network needed)
 npm run typecheck
 npm run dev         # local HTTP server on :3333 over this checkout (or GitHub if GITHUB_TOKEN + WIKI_REPO are set)
 npm run stdio       # serve this checkout over stdio (Claude Desktop, Claude Code)
+npm run export -- ../_site-preview   # write the public-only copy the website is built from
 ```
 
 Tests run against their own wiki skeleton in `test/fixtures/`, not this repo's content. `test/repo.test.ts` is the exception: it checks this repo's `wiki.config.yaml` and `_templates/`.
@@ -45,17 +46,21 @@ Tests run against their own wiki skeleton in `test/fixtures/`, not this repo's c
 |---|---|
 | `api/mcp.ts` | Vercel entry point: checks the secret, then serves MCP |
 | `src/settings.ts` | `wiki.config.yaml` schema, defaults, and the rules derived from it |
-| `src/wiki.ts` | The in-memory index, lookup/search, create/update/publish/log, health |
+| `src/wiki.ts` | The in-memory index, lookup/search, create/update/publish/move/log, history, health |
 | `src/markdown.ts` | Frontmatter, links, sections, summaries, private-content stripping |
 | `src/store.ts` | `GitHubStore` (deployed) and `FsStore` (local checkout, tests) |
 | `src/server.ts` | The MCP tools |
 | `src/env.ts` | Environment variables and the connector-URL secret |
+| `src/export.ts` | `npm run export`: the public-only copy for the website |
+| `src/dev.ts`, `src/stdio.ts` | Local HTTP and stdio servers over a checkout |
 
 ## How it works
 - On a cold start it downloads the repo tarball, reads `wiki.config.yaml`, and indexes every Markdown page: titles, aliases, frontmatter, links and summaries. Templates (`_templates/`), `_assets/`, `mcp/`, dotfolders and anything under `exclude:` are skipped.
 - On warm requests it only checks the branch head (one small API call, at most every 5 seconds) and reloads the pages and the config when someone else has pushed, for example from Obsidian.
 - Single writes use GitHub's Contents API with the file's SHA. If the file changed underneath, it re-reads and retries instead of overwriting.
-- `wiki_publish` validates the whole batch first, then makes one commit through the Git Data API (tree → commit → fast-forward ref). If someone pushed in between, it rebuilds the plan on the new head and tries again.
+- `wiki_publish` and `wiki_move` validate everything first, then make one commit through the Git Data API (tree → commit → fast-forward ref; a move deletes the old file in the same tree). If someone pushed in between, they rebuild the plan on the new head and try again.
+- If GitHub can't be reached (an outage, or an expired token), the server keeps answering from the last copy it loaded and says so in `wiki_overview` and `wiki_health`; edits fail until it's back. On a cold start it still connects, and each tool call explains the problem.
+- `wiki_history` reads GitHub's per-file history. Run locally (`dev`/`stdio`), it only knows the edits made since that process started.
 - Template hint text is written as `<!-- comments -->`. Obsidian hides these, and pages created through the server drop them.
 - A broken `wiki.config.yaml` never takes the server down: it falls back to the defaults and `wiki_health` reports the problem.
 - Log entries written before `log.dayStartHour` count toward the previous day, so a late night stays in one log file.

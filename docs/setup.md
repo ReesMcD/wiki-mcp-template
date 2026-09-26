@@ -69,7 +69,7 @@ Try: *"what's in the wiki?"*, then *"log: set up my wiki"*, then *"person: Ada L
 - `[[wikilinks]]`, attachments in `_assets/`, links updated on rename
 - **Templates** core plugin pointed at `_templates/` (same templates the server uses)
 - **Daily notes** core plugin writing to `Log/YYYY-MM-DD` with `_templates/log.md`, so "Open today's daily note" opens the same file `wiki_log` appends to
-- `mcp/`, `claude/`, `docs/` and the repo docs hidden from search and the graph
+- tooling (`mcp/`, `claude/`, `docs/`, `scripts/`, website build folders) and the repo docs hidden from search and the graph
 
 **iPhone:** Obsidian iOS plus **GitSync** (free) syncing the vault folder, or **Working Copy** as a fallback. Skip the Obsidian Git plugin on iOS; its own docs call the mobile version unstable.
 
@@ -78,7 +78,7 @@ Try: *"what's in the wiki?"*, then *"log: set up my wiki"*, then *"person: Ada L
 ## 8. Optional: local and other clients
 The same server runs locally over stdio against your checkout (edits go straight to disk, and Obsidian Git commits them):
 
-- **Claude Code:** `.mcp.json` in this repo already registers it as `wiki`. Run `cd mcp && npm install` once; Claude Code asks to approve the server the first time.
+- **Claude Code:** `.mcp.json` in this repo already registers it as `wiki`. Run `cd mcp && npm install` once (Claude Code on the web does this for you, via the startup hook in `.claude/`); Claude Code asks to approve the server the first time.
 - **Claude Desktop** (or any stdio MCP client): add to its config file
   ```json
   {
@@ -106,5 +106,6 @@ The site's title comes from `name` in `wiki.config.yaml`; analytics are off. To 
 > Check before you turn it on: anything not marked private **will be public**. Search the wiki for names, addresses or anything sensitive that isn't in `Private/` or a private section yet.
 
 ## Maintenance
-- Rotate the GitHub token before it expires (update `GITHUB_TOKEN` in Vercel, then redeploy).
+- Rotate the GitHub token before it expires (update `GITHUB_TOKEN` in Vercel, then redeploy). If it does expire, Claude keeps reading the last copy it loaded, and `wiki_health` says the token was rejected.
+- Pull in template improvements now and then with `scripts/update-from-template.sh` (see [customize.md](customize.md#getting-template-updates)).
 - Ask Claude to "tidy up" now and then: it runs `wiki_health` and fixes broken links, orphans and missing summaries.

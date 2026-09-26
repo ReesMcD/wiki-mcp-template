@@ -19,6 +19,6 @@ aliases: [Index, Start]
 
 ## Conventions
 - Frontmatter first, then a **bold one-line summary**, then `## Sections`.
-- Link with [[Page Title]]; put nicknames in `aliases`.
+- Link with `[[Page Title]]`; put nicknames in `aliases`.
 - Private material: `Private/`, `visibility: private`, `## Private Notes`, `%%comments%%`, or lines containing `(private)`.
-- Never delete: set `status: archived` and say why.
+- Never delete: set `status: archived` and say why. To rename or re-file a page, ask Claude to move it (every link gets fixed).
