@@ -25,7 +25,11 @@ That splits into two kinds of use:
 
 **Brainstorm, then publish once.** Open-ended planning reads freely but writes nothing until you say publish; then everything lands as one previewed commit through `wiki_publish`. No half-written wikis from abandoned ideas.
 
-**Never delete.** Pages are archived (`status: archived`) rather than removed, and edits are targeted (frontmatter patch, one section, find/replace) rather than full rewrites.
+**Never delete.** Pages are archived (`status: archived`) rather than removed, and edits are targeted (frontmatter patch, one section, find/replace) rather than full rewrites. Renames go through `wiki_move`, which fixes every link and keeps the old name as an alias, so nothing ends up orphaned.
+
+**Degrade, don't break.** If GitHub is unreachable or the token has expired, the connector keeps answering from the last copy it loaded and says so, instead of failing to connect.
+
+**Public is opt-in and derived.** The optional website is built from an export that applies the same private rules as `public_only`, so there's no second list of what to hide.
 
 **Auth is a secret in the connector URL.** It's the simplest thing claude.ai custom connectors accept for a personal server. It can be upgraded to OAuth later if the wiki is ever shared.
 
